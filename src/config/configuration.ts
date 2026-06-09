@@ -10,6 +10,7 @@ export interface AppConfig {
   defaultResponse: string;
   responsesFile: string;
   logRequests: boolean;
+  authToken: string;
 }
 
 function parseIntEnv(value: string | undefined, fallback: number): number {
@@ -36,5 +37,6 @@ export default (): { app: AppConfig } => ({
       process.env.DEFAULT_RESPONSE ?? 'No matching response found.',
     responsesFile: process.env.RESPONSES_FILE ?? './responses.json',
     logRequests: parseBoolEnv(process.env.LOG_REQUESTS, true),
+    authToken: process.env.AUTH_TOKEN ?? '',
   },
 });

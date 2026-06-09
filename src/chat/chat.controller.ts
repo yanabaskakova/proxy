@@ -1,10 +1,19 @@
-import { Body, Controller, Logger, Post, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Logger,
+  Post,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
+import { BearerAuthGuard } from '../auth/bearer-auth.guard';
 import { ChatCompletionRequestDto } from './dto/chat-completion.dto';
 import { ChatService } from './chat.service';
 
 @Controller('v1/chat')
+@UseGuards(BearerAuthGuard)
 export class ChatController {
   private readonly logger = new Logger(ChatController.name);
 
