@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "OpenAI-compatible prebuilt-response streaming server (NestJS) for use as an OpenClaw Gateway upstream.",
   "license": "MIT",
+  "packageManager": "pnpm@10.29.3",
   "scripts": {
     "build": "nest build",
     "start": "nest start",

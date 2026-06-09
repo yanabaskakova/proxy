@@ -20,14 +20,15 @@ upstream endpoint for **OpenClaw Gateway** or any OpenAI-compatible client.
 ## Requirements
 
 - Node.js 20+ (for local development)
+- [pnpm](https://pnpm.io) 10+ (`corepack enable` will provision the pinned version)
 - Docker (optional, for containerised runs)
 
 ## Quick start (local)
 
 ```bash
-npm install
+pnpm install
 cp .env.example .env      # then tweak values as needed
-npm run start:dev
+pnpm run start:dev
 ```
 
 > **Tip:** the spec default `STREAM_DELAY_MS=30000` is 30 seconds per chunk.
