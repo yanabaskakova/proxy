@@ -1,0 +1,24 @@
+services:
+  prebuilt-upstream:
+    build: .
+    image: openclaw-prebuilt-upstream:latest
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      PORT: 3000
+      STREAM_DELAY_MS: ${STREAM_DELAY_MS:-30000}
+      STREAM_CHUNK_SIZE: ${STREAM_CHUNK_SIZE:-100}
+      DEFAULT_RESPONSE: ${DEFAULT_RESPONSE:-No matching response found.}
+      RESPONSES_FILE: /app/responses.json
+      LOG_REQUESTS: ${LOG_REQUESTS:-true}
+    volumes:
+      # Mount the rules file so edits hot-reload without rebuilding the image.
+      - ./responses.json:/app/responses.json:ro
+    restart: unless-stopped
+    healthcheck:
+      test:
+        ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

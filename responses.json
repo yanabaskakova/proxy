@@ -1,0 +1,20 @@
+[
+  {
+    "id": "python-transactions",
+    "type": "contains",
+    "value": "transaction records",
+    "response": "Here is how you can process transaction records in Python:\n\n```python\nimport csv\nfrom decimal import Decimal\n\n\ndef load_transactions(path: str) -> list[dict]:\n    \"\"\"Load transaction records from a CSV file.\"\"\"\n    with open(path, newline=\"\") as fh:\n        reader = csv.DictReader(fh)\n        return [\n            {**row, \"amount\": Decimal(row[\"amount\"])}\n            for row in reader\n        ]\n\n\ndef total_by_account(records: list[dict]) -> dict[str, Decimal]:\n    totals: dict[str, Decimal] = {}\n    for record in records:\n        totals[record[\"account\"]] = totals.get(record[\"account\"], Decimal(0)) + record[\"amount\"]\n    return totals\n```\n\nUse `Decimal` rather than `float` so you never lose precision on currency values."
+  },
+  {
+    "id": "refund-policy",
+    "type": "regex",
+    "value": "(refund|money back)",
+    "response": "## Refund Policy\n\nYou can request a **full refund within 30 days** of purchase, no questions asked.\n\n1. Open the order in your dashboard.\n2. Click **Request refund**.\n3. Choose a reason and submit.\n\nRefunds are returned to the original payment method and typically settle within 5–10 business days."
+  },
+  {
+    "id": "greeting",
+    "type": "regex",
+    "value": "\\b(hi|hello|hey)\\b",
+    "response": "Hello! 👋 I'm a prebuilt response server. Ask me about *transaction records* or our *refund policy* to see a matched rule in action."
+  }
+]
