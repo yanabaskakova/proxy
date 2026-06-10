@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
@@ -8,14 +8,23 @@ import {
 } from 'class-validator';
 
 /**
- * A single OpenAI chat message. `content` is typed as a string here; the
- * OpenAI spec also permits content parts (arrays), which the controller
- * normalises before validation is consulted for matching.
+ * A single OpenAI chat message. `content` accepts either a plain string or the
+ * OpenAI content-parts form (`[{type:"text", text:"..."}, ...]`); the array
+ * form is flattened to a string here so downstream code stays string-only.
  */
 export class ChatMessageDto {
   @IsString()
   role!: string;
 
+  @Transform(({ value }) => {
+    if (Array.isArray(value)) {
+      return value
+        .filter((p) => p && p.type === 'text' && typeof p.text === 'string')
+        .map((p) => p.text)
+        .join('');
+    }
+    return value;
+  })
   @IsString()
   content!: string;
 }

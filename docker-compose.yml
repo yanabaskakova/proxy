@@ -7,6 +7,7 @@ services:
     environment:
       PORT: 3000
       STREAM_DELAY_MS: ${STREAM_DELAY_MS:-30000}
+      STREAM_INITIAL_DELAY_MS: ${STREAM_INITIAL_DELAY_MS:-0}
       STREAM_CHUNK_SIZE: ${STREAM_CHUNK_SIZE:-100}
       DEFAULT_RESPONSE: ${DEFAULT_RESPONSE:-No matching response found.}
       RESPONSES_FILE: /app/responses.json

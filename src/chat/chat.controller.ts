@@ -1,18 +1,11 @@
-import {
-  Body,
-  Controller,
-  Logger,
-  Post,
-  Res,
-  UseGuards,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Response } from 'express';
-import { BearerAuthGuard } from '../auth/bearer-auth.guard';
-import { ChatCompletionRequestDto } from './dto/chat-completion.dto';
-import { ChatService } from './chat.service';
+import { Body, Controller, Logger, Post, Res, UseGuards } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { Response } from "express";
+import { BearerAuthGuard } from "../auth/bearer-auth.guard";
+import { ChatCompletionRequestDto } from "./dto/chat-completion.dto";
+import { ChatService } from "./chat.service";
 
-@Controller('v1/chat')
+@Controller("v1/chat")
 @UseGuards(BearerAuthGuard)
 export class ChatController {
   private readonly logger = new Logger(ChatController.name);
@@ -22,17 +15,19 @@ export class ChatController {
     private readonly config: ConfigService,
   ) {}
 
-  @Post('completions')
+  @Post("completions")
   async createChatCompletion(
     @Body() body: ChatCompletionRequestDto,
     @Res() res: Response,
   ): Promise<void> {
-    if (this.config.get<boolean>('app.logRequests', true)) {
+    console.log("createChatCompletion");
+    if (this.config.get<boolean>("app.logRequests", true)) {
       this.logger.log(
         `Incoming request: model=${body.model} messages=${body.messages.length} stream=${body.stream === true}`,
       );
     }
 
+    console.log("transaction records");
     const { content } = this.chat.resolve(body.messages);
 
     try {
@@ -51,13 +46,13 @@ export class ChatController {
       if (!res.headersSent) {
         res.status(500).json({
           error: {
-            message: 'Internal server error',
-            type: 'internal_error',
+            message: "Internal server error",
+            type: "internal_error",
           },
         });
       } else if (!res.writableEnded) {
         // Best-effort termination of an already-open SSE stream.
-        res.write('data: [DONE]\n\n');
+        res.write("data: [DONE]\n\n");
         res.end();
       }
     }

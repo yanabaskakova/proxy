@@ -57,31 +57,44 @@ export class ResponsesService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Returns the response for the first rule that matches `prompt`, or
-   * `undefined` if nothing matches (caller falls back to DEFAULT_RESPONSE).
-   * Also returns the matched rule id so the caller can log it.
+   * Returns the response for the rule whose value matches LATEST in `prompt`
+   * (highest match position). Ties broken by rule definition order. If the
+   * client sends a concatenated conversation history, this picks the rule
+   * for the latest turn rather than the earliest. Returns `undefined` if
+   * nothing matches (caller falls back to DEFAULT_RESPONSE).
    */
   match(prompt: string): { ruleId: string; response: string } | undefined {
     const haystack = prompt.toLowerCase();
+    let best: { ruleId: string; response: string; position: number } | undefined;
+
     for (const compiled of this.compiledRules) {
-      if (this.matches(compiled, prompt, haystack)) {
-        return { ruleId: compiled.rule.id, response: compiled.rule.response };
+      const position = this.matchPosition(compiled, prompt, haystack);
+      if (position < 0) continue;
+      if (!best || position > best.position) {
+        best = {
+          ruleId: compiled.rule.id,
+          response: compiled.rule.response,
+          position,
+        };
       }
     }
-    return undefined;
+
+    return best
+      ? { ruleId: best.ruleId, response: best.response }
+      : undefined;
   }
 
-  private matches(
+  private matchPosition(
     compiled: CompiledRule,
     rawPrompt: string,
     lowerPrompt: string,
-  ): boolean {
+  ): number {
     if (compiled.regex) {
-      // Reset lastIndex defensively in case a global flag ever slips in.
       compiled.regex.lastIndex = 0;
-      return compiled.regex.test(rawPrompt);
+      const m = compiled.regex.exec(rawPrompt);
+      return m === null ? -1 : m.index;
     }
-    return lowerPrompt.includes(compiled.rule.value.toLowerCase());
+    return lowerPrompt.lastIndexOf(compiled.rule.value.toLowerCase());
   }
 
   private async loadRules(): Promise<void> {

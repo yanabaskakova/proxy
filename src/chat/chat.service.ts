@@ -82,6 +82,10 @@ export class ChatService {
     const id = this.completionId();
     const created = Math.floor(Date.now() / 1000);
     const delayMs = this.config.get<number>('app.streamDelayMs', 30000);
+    const initialDelayMs = this.config.get<number>(
+      'app.streamInitialDelayMs',
+      0,
+    );
     const chunks = this.stream.chunk(content);
 
     res.setHeader('Content-Type', 'text/event-stream');
@@ -90,6 +94,14 @@ export class ChatService {
     res.flushHeaders?.();
 
     this.logger.log(`Stream started (${chunks.length} chunk(s))`);
+
+    if (initialDelayMs > 0) {
+      await sleep(initialDelayMs);
+      if (res.writableEnded) {
+        this.logger.warn('Client disconnected during initial delay');
+        return;
+      }
+    }
 
     // First chunk carries the assistant role.
     this.writeChunk(res, id, created, model, { role: 'assistant' }, null);
