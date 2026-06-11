@@ -27,9 +27,9 @@ export class ChatService {
   ) {}
 
   /** Resolve the prompt (last user message) to a rule response or the default. */
-  resolve(messages: ChatMessageDto[]): ResolvedResponse {
+  resolve(messages: ChatMessageDto[], model?: string): ResolvedResponse {
     const prompt = this.extractPrompt(messages);
-    const match = this.responses.match(prompt);
+    const match = this.responses.match(prompt, model);
 
     if (match) {
       this.logger.log(`Matched rule id: ${match.ruleId}`);

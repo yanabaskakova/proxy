@@ -11,10 +11,13 @@ services:
       STREAM_CHUNK_SIZE: ${STREAM_CHUNK_SIZE:-100}
       DEFAULT_RESPONSE: ${DEFAULT_RESPONSE:-No matching response found.}
       RESPONSES_FILE: /app/responses.json
+      RESPONSES_FILES_BY_MODEL: ${RESPONSES_FILES_BY_MODEL:-{"vanilla":"/app/vanilla-responses.json","eagle-oss":"/app/gpt-oss-eagle-responses.json","gpt-oss":"/app/gpt-oss-eagle-responses.json"}}
       LOG_REQUESTS: ${LOG_REQUESTS:-true}
     volumes:
-      # Mount the rules file so edits hot-reload without rebuilding the image.
+      # Mount the rules files so edits hot-reload without rebuilding the image.
       - ./responses.json:/app/responses.json:ro
+      - ./vanilla-responses.json:/app/vanilla-responses.json:ro
+      - ./gpt-oss-eagle-responses.json:/app/gpt-oss-eagle-responses.json:ro
     restart: unless-stopped
     healthcheck:
       test:

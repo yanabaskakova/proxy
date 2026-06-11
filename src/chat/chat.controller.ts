@@ -28,7 +28,7 @@ export class ChatController {
     }
 
     console.log("transaction records");
-    const { content } = this.chat.resolve(body.messages);
+    const { content } = this.chat.resolve(body.messages, body.model);
 
     try {
       if (body.stream === true) {

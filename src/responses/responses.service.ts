@@ -19,55 +19,92 @@ interface CompiledRule {
   regex?: RegExp;
 }
 
+interface RuleBundle {
+  /** Pattern (model-name substring) this bundle is keyed under; '' = default. */
+  pattern: string;
+  /** Absolute path on disk. */
+  path: string;
+  rules: CompiledRule[];
+  watcher?: FSWatcher;
+  reloadTimer?: NodeJS.Timeout;
+}
+
 /**
- * Loads response rules from the configured JSON file, recompiles them, and
- * hot-reloads automatically when the file changes (without restarting the
- * server). Exposes `match()` to resolve a prompt to a response string.
+ * Loads response rules from one or more JSON files, recompiles them, and
+ * hot-reloads automatically when each file changes. The default bundle is
+ * `RESPONSES_FILE`; optional per-model bundles come from
+ * `RESPONSES_FILES_BY_MODEL` (JSON map of pattern → filepath). When
+ * `match()` is called with a `model`, bundles whose pattern is contained in
+ * the model name are checked in insertion order, falling back to the
+ * default bundle.
  */
 @Injectable()
 export class ResponsesService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ResponsesService.name);
-  private readonly responsesPath: string;
-  private compiledRules: CompiledRule[] = [];
-  private watcher?: FSWatcher;
-  private reloadTimer?: NodeJS.Timeout;
+  private readonly bundles: RuleBundle[] = [];
 
   constructor(private readonly config: ConfigService) {
-    const configured = this.config.get<string>('app.responsesFile', './responses.json');
-    this.responsesPath = isAbsolute(configured)
+    const defaultPath = this.config.get<string>(
+      'app.responsesFile',
+      './responses.json',
+    );
+    this.bundles.push(this.makeBundle('', defaultPath));
+
+    const overrides = this.config.get<Record<string, string>>(
+      'app.responsesFilesByModel',
+      {},
+    );
+    for (const [pattern, path] of Object.entries(overrides)) {
+      this.bundles.push(this.makeBundle(pattern, path));
+    }
+  }
+
+  private makeBundle(pattern: string, configured: string): RuleBundle {
+    const path = isAbsolute(configured)
       ? configured
       : resolve(process.cwd(), configured);
+    return { pattern, path, rules: [] };
   }
 
   async onModuleInit(): Promise<void> {
-    await this.loadRules();
-    this.startWatching();
+    for (const bundle of this.bundles) {
+      await this.loadBundle(bundle);
+      this.watchBundle(bundle);
+    }
   }
 
   onModuleDestroy(): void {
-    if (this.reloadTimer) {
-      clearTimeout(this.reloadTimer);
+    for (const bundle of this.bundles) {
+      if (bundle.reloadTimer) clearTimeout(bundle.reloadTimer);
+      bundle.watcher?.close();
     }
-    this.watcher?.close();
   }
 
-  /** Number of currently loaded rules (used by health/diagnostics). */
+  /** Total rules across all bundles (used by health/diagnostics). */
   get ruleCount(): number {
-    return this.compiledRules.length;
+    return this.bundles.reduce((sum, b) => sum + b.rules.length, 0);
   }
 
   /**
    * Returns the response for the rule whose value matches LATEST in `prompt`
-   * (highest match position). Ties broken by rule definition order. If the
-   * client sends a concatenated conversation history, this picks the rule
-   * for the latest turn rather than the earliest. Returns `undefined` if
-   * nothing matches (caller falls back to DEFAULT_RESPONSE).
+   * (highest match position) within the bundle selected by `model`. Ties
+   * broken by rule definition order. Returns `undefined` if nothing matches
+   * (caller falls back to DEFAULT_RESPONSE).
+   *
+   * Bundle selection: the first override bundle whose pattern is contained
+   * in the model name wins; otherwise the default bundle is used.
    */
-  match(prompt: string): { ruleId: string; response: string } | undefined {
+  match(
+    prompt: string,
+    model?: string,
+  ): { ruleId: string; response: string } | undefined {
+    const bundle = this.selectBundle(model);
     const haystack = prompt.toLowerCase();
-    let best: { ruleId: string; response: string; position: number } | undefined;
+    let best:
+      | { ruleId: string; response: string; position: number }
+      | undefined;
 
-    for (const compiled of this.compiledRules) {
+    for (const compiled of bundle.rules) {
       const position = this.matchPosition(compiled, prompt, haystack);
       if (position < 0) continue;
       if (!best || position > best.position) {
@@ -84,6 +121,19 @@ export class ResponsesService implements OnModuleInit, OnModuleDestroy {
       : undefined;
   }
 
+  private selectBundle(model?: string): RuleBundle {
+    if (model) {
+      const lower = model.toLowerCase();
+      for (const bundle of this.bundles) {
+        if (bundle.pattern === '') continue;
+        if (lower.includes(bundle.pattern.toLowerCase())) {
+          return bundle;
+        }
+      }
+    }
+    return this.bundles[0];
+  }
+
   private matchPosition(
     compiled: CompiledRule,
     rawPrompt: string,
@@ -97,9 +147,9 @@ export class ResponsesService implements OnModuleInit, OnModuleDestroy {
     return lowerPrompt.lastIndexOf(compiled.rule.value.toLowerCase());
   }
 
-  private async loadRules(): Promise<void> {
+  private async loadBundle(bundle: RuleBundle): Promise<void> {
     try {
-      const raw = await readFile(this.responsesPath, 'utf-8');
+      const raw = await readFile(bundle.path, 'utf-8');
       const parsed = JSON.parse(raw) as unknown;
 
       if (!Array.isArray(parsed)) {
@@ -109,19 +159,18 @@ export class ResponsesService implements OnModuleInit, OnModuleDestroy {
       const compiled: CompiledRule[] = [];
       for (const entry of parsed) {
         const rule = this.validateRule(entry);
-        if (!rule) {
-          continue;
-        }
+        if (!rule) continue;
         compiled.push(this.compileRule(rule));
       }
 
-      this.compiledRules = compiled;
+      bundle.rules = compiled;
+      const tag = bundle.pattern ? ` [${bundle.pattern}]` : '';
       this.logger.log(
-        `Responses reloaded from ${basename(this.responsesPath)} (${compiled.length} rule(s))`,
+        `Responses reloaded from ${basename(bundle.path)}${tag} (${compiled.length} rule(s))`,
       );
     } catch (error) {
       this.logger.error(
-        `Failed to load responses from ${this.responsesPath}: ${(error as Error).message}`,
+        `Failed to load responses from ${bundle.path}: ${(error as Error).message}`,
       );
       // Keep the previously loaded rules on a failed reload so a bad edit
       // does not blank out the server.
@@ -171,24 +220,19 @@ export class ResponsesService implements OnModuleInit, OnModuleDestroy {
     return { rule };
   }
 
-  private startWatching(): void {
+  private watchBundle(bundle: RuleBundle): void {
     try {
-      this.watcher = watch(this.responsesPath, (eventType) => {
-        if (eventType !== 'change' && eventType !== 'rename') {
-          return;
-        }
-        // Debounce: editors often emit several events for one save.
-        if (this.reloadTimer) {
-          clearTimeout(this.reloadTimer);
-        }
-        this.reloadTimer = setTimeout(() => {
-          void this.loadRules();
+      bundle.watcher = watch(bundle.path, (eventType) => {
+        if (eventType !== 'change' && eventType !== 'rename') return;
+        if (bundle.reloadTimer) clearTimeout(bundle.reloadTimer);
+        bundle.reloadTimer = setTimeout(() => {
+          void this.loadBundle(bundle);
         }, 150);
       });
-      this.logger.log(`Watching ${this.responsesPath} for changes`);
+      this.logger.log(`Watching ${bundle.path} for changes`);
     } catch (error) {
       this.logger.warn(
-        `Could not watch responses file for hot-reload: ${(error as Error).message}`,
+        `Could not watch ${bundle.path} for hot-reload: ${(error as Error).message}`,
       );
     }
   }
