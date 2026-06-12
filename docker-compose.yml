@@ -9,15 +9,19 @@ services:
       STREAM_DELAY_MS: ${STREAM_DELAY_MS:-30000}
       STREAM_INITIAL_DELAY_MS: ${STREAM_INITIAL_DELAY_MS:-0}
       STREAM_CHUNK_SIZE: ${STREAM_CHUNK_SIZE:-100}
+      STREAM_DELAY_MS_BY_MODEL: ${STREAM_DELAY_MS_BY_MODEL:-}
+      STREAM_INITIAL_DELAY_MS_BY_MODEL: ${STREAM_INITIAL_DELAY_MS_BY_MODEL:-}
+      STREAM_CHUNK_SIZE_BY_MODEL: ${STREAM_CHUNK_SIZE_BY_MODEL:-}
       DEFAULT_RESPONSE: ${DEFAULT_RESPONSE:-No matching response found.}
       RESPONSES_FILE: /app/responses.json
-      RESPONSES_FILES_BY_MODEL: ${RESPONSES_FILES_BY_MODEL:-{"vanilla":"/app/vanilla-responses.json","eagle-oss":"/app/gpt-oss-eagle-responses.json","gpt-oss":"/app/gpt-oss-eagle-responses.json"}}
+      RESPONSES_FILES_BY_MODEL: ${RESPONSES_FILES_BY_MODEL:-{"vanilla":"/app/vanilla-responses.json","eagle-oss":"/app/gpt-oss-eagle-responses.json","gpt-oss":"/app/gpt-oss-eagle-responses.json","cerebras":"/app/cerebras-responses.json"}}
       LOG_REQUESTS: ${LOG_REQUESTS:-true}
     volumes:
       # Mount the rules files so edits hot-reload without rebuilding the image.
       - ./responses.json:/app/responses.json:ro
       - ./vanilla-responses.json:/app/vanilla-responses.json:ro
       - ./gpt-oss-eagle-responses.json:/app/gpt-oss-eagle-responses.json:ro
+      - ./cerebras-responses.json:/app/cerebras-responses.json:ro
     restart: unless-stopped
     healthcheck:
       test:

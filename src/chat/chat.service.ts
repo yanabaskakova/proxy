@@ -81,12 +81,25 @@ export class ChatService {
   ): Promise<void> {
     const id = this.completionId();
     const created = Math.floor(Date.now() / 1000);
-    const delayMs = this.config.get<number>('app.streamDelayMs', 30000);
-    const initialDelayMs = this.config.get<number>(
+    const delayMs = this.resolveByModel(
+      'app.streamDelayMsByModel',
+      'app.streamDelayMs',
+      model,
+      30000,
+    );
+    const initialDelayMs = this.resolveByModel(
+      'app.streamInitialDelayMsByModel',
       'app.streamInitialDelayMs',
+      model,
       0,
     );
-    const chunks = this.stream.chunk(content);
+    const chunkSize = this.resolveByModel(
+      'app.streamChunkSizeByModel',
+      'app.streamChunkSize',
+      model,
+      100,
+    );
+    const chunks = this.stream.chunk(content, chunkSize);
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -141,6 +154,26 @@ export class ChatService {
       choices: [{ index: 0, delta, finish_reason: finishReason }],
     };
     res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  }
+
+  /**
+   * Resolve a numeric setting that may be overridden per model. `mapKey`
+   * points to a `Record<string, number>` (pattern -> value); `scalarKey`
+   * is the fallback. First case-insensitive substring match on `model`
+   * wins; otherwise the scalar default is used.
+   */
+  private resolveByModel(
+    mapKey: string,
+    scalarKey: string,
+    model: string,
+    fallback: number,
+  ): number {
+    const map = this.config.get<Record<string, number>>(mapKey, {});
+    const lower = model.toLowerCase();
+    for (const [pattern, value] of Object.entries(map)) {
+      if (lower.includes(pattern.toLowerCase())) return value;
+    }
+    return this.config.get<number>(scalarKey, fallback);
   }
 
   /** Use the last user message; fall back to the last message of any role. */

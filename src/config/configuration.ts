@@ -8,6 +8,13 @@ export interface AppConfig {
   streamDelayMs: number;
   streamInitialDelayMs: number;
   streamChunkSize: number;
+  /** Per-model overrides for the three streaming knobs. Same matching
+   *  rules as `responsesFilesByModel`: case-insensitive substring against
+   *  the request `model`, first match wins, fall back to the scalar value
+   *  when nothing matches. Values are integers in ms / chars. */
+  streamDelayMsByModel: Record<string, number>;
+  streamInitialDelayMsByModel: Record<string, number>;
+  streamChunkSizeByModel: Record<string, number>;
   defaultResponse: string;
   responsesFile: string;
   /**
@@ -59,12 +66,48 @@ function parseRecordEnv(
   }
 }
 
+function parseRecordIntEnv(
+  value: string | undefined,
+): Record<string, number> {
+  if (value === undefined || value.trim() === '') {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return {};
+    }
+    const result: Record<string, number> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      const n =
+        typeof v === 'number'
+          ? v
+          : typeof v === 'string'
+            ? Number.parseInt(v, 10)
+            : NaN;
+      if (Number.isFinite(n)) result[k] = n;
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 export default (): { app: AppConfig } => ({
   app: {
     port: parseIntEnv(process.env.PORT, 3000),
     streamDelayMs: parseIntEnv(process.env.STREAM_DELAY_MS, 30000),
     streamInitialDelayMs: parseIntEnv(process.env.STREAM_INITIAL_DELAY_MS, 0),
     streamChunkSize: parseIntEnv(process.env.STREAM_CHUNK_SIZE, 100),
+    streamDelayMsByModel: parseRecordIntEnv(
+      process.env.STREAM_DELAY_MS_BY_MODEL,
+    ),
+    streamInitialDelayMsByModel: parseRecordIntEnv(
+      process.env.STREAM_INITIAL_DELAY_MS_BY_MODEL,
+    ),
+    streamChunkSizeByModel: parseRecordIntEnv(
+      process.env.STREAM_CHUNK_SIZE_BY_MODEL,
+    ),
     defaultResponse:
       process.env.DEFAULT_RESPONSE ?? 'No matching response found.',
     responsesFile: process.env.RESPONSES_FILE ?? './responses.json',

@@ -23,21 +23,23 @@ interface Block {
 export class StreamService {
   constructor(private readonly config: ConfigService) {}
 
-  private get chunkSize(): number {
+  private get defaultChunkSize(): number {
     return this.config.get<number>('app.streamChunkSize', 100);
   }
 
-  chunk(text: string): string[] {
+  chunk(text: string, chunkSize?: number): string[] {
     if (text === '') {
       return [];
     }
+    const size =
+      chunkSize !== undefined && chunkSize > 0 ? chunkSize : this.defaultChunkSize;
 
     const chunks: string[] = [];
     for (const block of this.toBlocks(text)) {
-      if (block.isCode || block.text.length <= this.chunkSize) {
+      if (block.isCode || block.text.length <= size) {
         chunks.push(block.text);
       } else {
-        chunks.push(...this.splitBySize(block.text, this.chunkSize));
+        chunks.push(...this.splitBySize(block.text, size));
       }
     }
 
