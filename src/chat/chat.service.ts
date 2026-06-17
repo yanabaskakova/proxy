@@ -6,10 +6,13 @@ import { Response } from 'express';
 import { ResponsesService } from '../responses/responses.service';
 import { StreamService } from '../stream/stream.service';
 import { ChatMessageDto } from './dto/chat-completion.dto';
+import { RecordedChunk } from '../responses/interfaces/response-rule.interface';
 
 interface ResolvedResponse {
   ruleId: string;
   content: string;
+  /** Pre-recorded SSE chunks for verbatim streaming replay, if available. */
+  chunks?: RecordedChunk[];
 }
 
 /**
@@ -32,8 +35,13 @@ export class ChatService {
     const match = this.responses.match(prompt, model);
 
     if (match) {
-      this.logger.log(`Matched rule id: ${match.ruleId}`);
-      return { ruleId: match.ruleId, content: match.response };
+      const replay = match.chunks ? ` (replay ${match.chunks.length} chunks)` : '';
+      this.logger.log(`Matched rule id: ${match.ruleId}${replay}`);
+      return {
+        ruleId: match.ruleId,
+        content: match.response,
+        chunks: match.chunks,
+      };
     }
 
     this.logger.log('No rule matched; using default response');
@@ -78,7 +86,16 @@ export class ChatService {
     res: Response,
     model: string,
     content: string,
+    recorded?: RecordedChunk[],
   ): Promise<void> {
+    // Recorded path: replay the original SSE bytes verbatim with the recorded
+    // per-chunk timing. The wire format matches what the source model emitted
+    // (model name, finish_reason placement, reasoning_content vs content, etc.).
+    if (recorded && recorded.length > 0) {
+      await this.replayRecorded(res, recorded);
+      return;
+    }
+
     const id = this.completionId();
     const created = Math.floor(Date.now() / 1000);
     const delayMs = this.resolveByModel(
@@ -136,6 +153,55 @@ export class ChatService {
     res.end();
 
     this.logger.log('Stream completed');
+  }
+
+  /**
+   * Replay a recorded SSE stream chunk-for-chunk. Sleeps `dt_ms` before
+   * emitting each chunk, then writes `data: ${raw}\n\n`. Bails early if
+   * the client disconnects mid-stream.
+   */
+  private async replayRecorded(
+    res: Response,
+    chunks: RecordedChunk[],
+  ): Promise<void> {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+    // Disable Nagle so each chunk hits the wire immediately instead of
+    // being coalesced with neighbours into one packet.
+    res.socket?.setNoDelay?.(true);
+
+    const minDt = this.config.get<number>('app.replayDtMinMs', 0);
+
+    this.logger.log(
+      `Replaying ${chunks.length} recorded chunk(s) (minDt=${minDt}ms)`,
+    );
+
+    for (const chunk of chunks) {
+      if (res.writableEnded) {
+        this.logger.warn('Client disconnected; aborting replay');
+        return;
+      }
+      // Always defer at least one event-loop turn so Node flushes the
+      // previous write before we queue the next one. `await sleep(0)` is
+      // enough; for non-zero recorded gaps (or the configured floor) we
+      // sleep the actual interval.
+      const dt = Math.max(chunk.dt_ms, minDt);
+      await sleep(dt);
+      if (res.writableEnded) return;
+      res.write(`data: ${chunk.raw}\n\n`);
+    }
+
+    // Defensive: most recordings already end with the [DONE] sentinel as a
+    // chunk. If not, terminate the stream explicitly.
+    const last = chunks[chunks.length - 1];
+    if (!last?.done && last?.raw !== '[DONE]') {
+      res.write('data: [DONE]\n\n');
+    }
+    res.end();
+    this.logger.log('Replay completed');
   }
 
   private writeChunk(

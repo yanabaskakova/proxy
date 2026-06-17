@@ -28,11 +28,11 @@ export class ChatController {
     }
 
     console.log("transaction records");
-    const { content } = this.chat.resolve(body.messages, body.model);
+    const { content, chunks } = this.chat.resolve(body.messages, body.model);
 
     try {
       if (body.stream === true) {
-        await this.chat.streamCompletion(res, body.model, content);
+        await this.chat.streamCompletion(res, body.model, content, chunks);
         return;
       }
 

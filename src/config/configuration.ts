@@ -8,6 +8,11 @@ export interface AppConfig {
   streamDelayMs: number;
   streamInitialDelayMs: number;
   streamChunkSize: number;
+  /** When replaying recorded chunks, the minimum sleep between chunks.
+   *  Caps the bursting that comes from chunks recorded with `dt_ms ≈ 0`.
+   *  Defaults to 0 (replay exactly as recorded). 5–15 ms gives smooth,
+   *  visible streaming similar to live eagle.ai responses. */
+  replayDtMinMs: number;
   /** Per-model overrides for the three streaming knobs. Same matching
    *  rules as `responsesFilesByModel`: case-insensitive substring against
    *  the request `model`, first match wins, fall back to the scalar value
@@ -99,6 +104,7 @@ export default (): { app: AppConfig } => ({
     streamDelayMs: parseIntEnv(process.env.STREAM_DELAY_MS, 30000),
     streamInitialDelayMs: parseIntEnv(process.env.STREAM_INITIAL_DELAY_MS, 0),
     streamChunkSize: parseIntEnv(process.env.STREAM_CHUNK_SIZE, 100),
+    replayDtMinMs: parseIntEnv(process.env.REPLAY_DT_MIN_MS, 0),
     streamDelayMsByModel: parseRecordIntEnv(
       process.env.STREAM_DELAY_MS_BY_MODEL,
     ),

@@ -9,6 +9,7 @@ import { FSWatcher, watch } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { basename, isAbsolute, resolve } from 'node:path';
 import {
+  RecordedChunk,
   ResponseRule,
   ResponseRuleType,
 } from './interfaces/response-rule.interface';
@@ -97,11 +98,18 @@ export class ResponsesService implements OnModuleInit, OnModuleDestroy {
   match(
     prompt: string,
     model?: string,
-  ): { ruleId: string; response: string } | undefined {
+  ):
+    | { ruleId: string; response: string; chunks?: RecordedChunk[] }
+    | undefined {
     const bundle = this.selectBundle(model);
     const haystack = prompt.toLowerCase();
     let best:
-      | { ruleId: string; response: string; position: number }
+      | {
+          ruleId: string;
+          response: string;
+          chunks?: RecordedChunk[];
+          position: number;
+        }
       | undefined;
 
     for (const compiled of bundle.rules) {
@@ -111,13 +119,18 @@ export class ResponsesService implements OnModuleInit, OnModuleDestroy {
         best = {
           ruleId: compiled.rule.id,
           response: compiled.rule.response,
+          chunks: compiled.rule.chunks,
           position,
         };
       }
     }
 
     return best
-      ? { ruleId: best.ruleId, response: best.response }
+      ? {
+          ruleId: best.ruleId,
+          response: best.response,
+          chunks: best.chunks,
+        }
       : undefined;
   }
 
@@ -202,7 +215,40 @@ export class ResponsesService implements OnModuleInit, OnModuleDestroy {
       return undefined;
     }
 
-    return { id, type: type as ResponseRuleType, value, response };
+    const chunks = this.validateChunks(candidate.chunks, id);
+
+    return { id, type: type as ResponseRuleType, value, response, chunks };
+  }
+
+  private validateChunks(
+    raw: unknown,
+    ruleId: string,
+  ): RecordedChunk[] | undefined {
+    if (raw === undefined) return undefined;
+    if (!Array.isArray(raw)) {
+      this.logger.warn(`Rule "${ruleId}": "chunks" must be an array; ignoring`);
+      return undefined;
+    }
+    const out: RecordedChunk[] = [];
+    for (const entry of raw) {
+      if (
+        typeof entry !== 'object' ||
+        entry === null ||
+        typeof (entry as Record<string, unknown>).raw !== 'string'
+      ) {
+        // Skip malformed chunk entries silently — a partial recording is
+        // still usable.
+        continue;
+      }
+      const c = entry as Record<string, unknown>;
+      out.push({
+        t_ms: typeof c.t_ms === 'number' ? c.t_ms : 0,
+        dt_ms: typeof c.dt_ms === 'number' ? c.dt_ms : 0,
+        raw: c.raw as string,
+        done: c.done === true || c.raw === '[DONE]',
+      });
+    }
+    return out.length > 0 ? out : undefined;
   }
 
   private compileRule(rule: ResponseRule): CompiledRule {
