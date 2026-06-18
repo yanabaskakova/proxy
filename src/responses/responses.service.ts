@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { FSWatcher, watch } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { basename, isAbsolute, resolve } from 'node:path';
+import { gunzipSync } from 'node:zlib';
 import {
   RecordedChunk,
   ResponseRule,
@@ -162,7 +163,14 @@ export class ResponsesService implements OnModuleInit, OnModuleDestroy {
 
   private async loadBundle(bundle: RuleBundle): Promise<void> {
     try {
-      const raw = await readFile(bundle.path, 'utf-8');
+      // Support both .json and .json.gz on disk transparently.
+      let raw: string;
+      if (bundle.path.endsWith('.gz')) {
+        const buf = await readFile(bundle.path);
+        raw = gunzipSync(buf).toString('utf-8');
+      } else {
+        raw = await readFile(bundle.path, 'utf-8');
+      }
       const parsed = JSON.parse(raw) as unknown;
 
       if (!Array.isArray(parsed)) {

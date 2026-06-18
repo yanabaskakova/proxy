@@ -14,16 +14,16 @@ services:
       STREAM_INITIAL_DELAY_MS_BY_MODEL: ${STREAM_INITIAL_DELAY_MS_BY_MODEL:-}
       STREAM_CHUNK_SIZE_BY_MODEL: ${STREAM_CHUNK_SIZE_BY_MODEL:-}
       DEFAULT_RESPONSE: ${DEFAULT_RESPONSE:-No matching response found.}
-      RESPONSES_FILE: /app/new-responses.json
-      RESPONSES_FILES_BY_MODEL: ${RESPONSES_FILES_BY_MODEL:-{"vanilla":"/app/new-vanilla-responses.json","eagle-oss":"/app/new-gpt-oss-eagle-responses.json","gpt-oss":"/app/new-gpt-oss-eagle-responses.json","cerebras":"/app/new-cerebras-responses.json","groq":"/app/new-groq-responses.json"}}
+      RESPONSES_FILE: /app/new-responses.json.gz
+      RESPONSES_FILES_BY_MODEL: ${RESPONSES_FILES_BY_MODEL:-{"vanilla":"/app/new-vanilla-responses.json.gz","eagle-oss":"/app/new-gpt-oss-eagle-responses.json.gz","gpt-oss":"/app/new-gpt-oss-eagle-responses.json.gz","cerebras":"/app/new-cerebras-responses.json.gz","groq":"/app/new-groq-responses.json.gz"}}
       LOG_REQUESTS: ${LOG_REQUESTS:-true}
     volumes:
       # Mount the rules files so edits hot-reload without rebuilding the image.
-      - ./new-responses.json:/app/new-responses.json:ro
-      - ./new-vanilla-responses.json:/app/new-vanilla-responses.json:ro
-      - ./new-gpt-oss-eagle-responses.json:/app/new-gpt-oss-eagle-responses.json:ro
-      - ./new-cerebras-responses.json:/app/new-cerebras-responses.json:ro
-      - ./new-groq-responses.json:/app/new-groq-responses.json:ro
+      - ./new-responses.json.gz:/app/new-responses.json.gz:ro
+      - ./new-vanilla-responses.json.gz:/app/new-vanilla-responses.json.gz:ro
+      - ./new-gpt-oss-eagle-responses.json.gz:/app/new-gpt-oss-eagle-responses.json.gz:ro
+      - ./new-cerebras-responses.json.gz:/app/new-cerebras-responses.json.gz:ro
+      - ./new-groq-responses.json.gz:/app/new-groq-responses.json.gz:ro
     restart: unless-stopped
     healthcheck:
       test:

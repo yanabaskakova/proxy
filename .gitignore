@@ -3,3 +3,8 @@ dist/
 *.log
 .env
 .DS_Store
+
+# Uncompressed/old recording files (use .json.gz instead — far smaller for git)
+new-*.json
+!new-*.json.gz
+*-old.json
